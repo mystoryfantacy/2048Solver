@@ -32,31 +32,30 @@ def init_table():
       state = res
       mask = 0x000F
       res = 0x0000
+      add = 1
       for j in range(4):
           if (state & mask) == 0:
               break
           if ((state >> 4) & mask) == (state & mask):
-              res |= ((state & mask) << 1)
+              res |= ((state & mask) + (1 << (j * 4)))
               state >>= 4
           else:
               res |= (state & mask)
           mask <<= 4
       transition_table[i][0] = i ^ res
-      transition_table[revert(i)][1] = revert(i) ^ res
+      transition_table[revert(i)][1] = revert(i) ^ revert(res)
 
 class Board():
   def __init__(self):
       init_table()
   # `s` is a board state, i.e the type of `s` is uint64
-  def tranpose(self, s):
+  def transpose(self, s):
+      s = int(s)
       ret = 0
-      mask = 0x0F << 63
       for i in range(4):
-        ret |= (s & mask)
-        ret |= (s << 12) & (mask >> 4)
-        ret |= (s << 24) & (mask >> 8)
-        ret |= (s << 36) & (mask >> 12)
-        mask >>= 16
+          for j in range(4):
+              v = ((s >> (4 * (i * 4 + j))) & 0x0F)
+              ret |= (v << (4 * (j * 4 + i)))
       return ret
 
   def insert(self, s, k, v):
@@ -64,38 +63,35 @@ class Board():
           if len(k) != 2:
               raise ValueError
           k = k[0] * 4 + k[1]
-      s = s | (v << (k * 4))
+      s = s | (int(v) << (k * 4))
       return s
 
   def move_up(self, s):
-      tmp_s = self.tranpose(s)
+      tmp_s = self.transpose(s)
       for i in range(4):
           offset = i * 16
-          tmp_s ^= (transition_table[((tmp_s >> offset) & 0xFFFF)][0] << offset)
-      s = self.tranpose(tmp_s)
+          tmp_s ^= int(transition_table[((tmp_s >> offset) & 0xFFFF)][1] << offset)
+      s = self.transpose(tmp_s)
       return s
 
   def move_down(self, s):
-      tmp_s = self.tranpose(s)
+      tmp_s = self.transpose(s)
       for i in range(4):
           offset = i * 16
-          tmp_s ^= (transition_table[((tmp_s >> offset) & 0xFFFF)][1] << offset)
-      s = self.tranpose(tmp_s)
+          tmp_s ^= int(transition_table[((tmp_s >> offset) & 0xFFFF)][0] << offset)
+      s = self.transpose(tmp_s)
       return s
 
   def move_left(self, s):
       for i in range(4):
           offset = i * 16
-          s ^= (transition_table[((s >> offset) & 0xFFFF)][1] << offset)
+          s ^= int(transition_table[((s >> offset) & 0xFFFF)][1] << offset)
       return s
 
   def move_right(self, s):
-      print(hex(s))
-      print(hex(s & 0xFFFF))
-      print(hex(transition_table[s & 0xFFFF][0]))
       for i in range(4):
           offset = i * 16
-          s ^= (transition_table[((s >> offset) & 0xFFFF)][0] << offset)
+          s ^= int(transition_table[((s >> offset) & 0xFFFF)][0] << offset)
       return s
 
   def get_empty_tile(self, s):
@@ -108,7 +104,9 @@ class Board():
   def display(self, s):
       a = [0] * 16
       for i in range(15, -1, -1):
-          a[15 - i] = (s >> (i * 4)) & 0xF
+          a[15 - i] = (1 << ((s >> (i * 4)) & 0xF))
+          if a[15 - i] == 1:
+              a[15 - i] = 0
       for i in range(4):
           for j in range(4):
               print("%4d" %(a[i * 4 + j]),end='')
@@ -128,15 +126,17 @@ class Game2048():
             self.state = Game2048.board.insert(self.state, tiles[i], values[i])
 
     def get_value(self, size = 1):
-        return np.random.choice(a= [2,4], size=size, replace=True, p = [0.5, 0.5])
+        return list(np.random.choice(a= [1,2], size=size, replace=True, p = [0.5, 0.5]))
 
     def random_policy(self):
-        # state = Game2048.action[np.random.randint(0,4)](self.state)
-        state = Game2048.board.move_up(self.state)  # bug should be fixed
+        state = Game2048.action[np.random.randint(0,4)](self.state)
         if state == self.state:
             return True
         else:
-            self.state = state
+            tile = Game2048.board.get_empty_tile(state)
+            tile = random.sample(tile, 1)
+            value = self.get_value(size = 1)
+            self.state = Game2048.board.insert(state, tile[0], value[0])
             return False
 
     def display(self):
