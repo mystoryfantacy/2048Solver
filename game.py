@@ -101,6 +101,13 @@ class Board():
               ret.append(i)
       return ret
 
+  def get_score(self, s):
+      score = 1
+      for i in range(15, -1, -1):
+          v = (1 << ((s >> (i * 4)) & 0xF))
+          score = max(score, v)
+      return score if score > 1 else 0
+
   def display(self, s):
       a = [0] * 16
       for i in range(15, -1, -1):
@@ -129,15 +136,26 @@ class Game2048():
         return list(np.random.choice(a= [1,2], size=size, replace=True, p = [0.5, 0.5]))
 
     def random_policy(self):
-        state = Game2048.action[np.random.randint(0,4)](self.state)
-        if state == self.state:
-            return True
+        end,score = self.check_state()
+        if end:
+            return end, score
         else:
+            state = Game2048.action[np.random.randint(0,4)](self.state)
+            while state == self.state:
+              state = Game2048.action[np.random.randint(0,4)](self.state)
             tile = Game2048.board.get_empty_tile(state)
             tile = random.sample(tile, 1)
             value = self.get_value(size = 1)
             self.state = Game2048.board.insert(state, tile[0], value[0])
-            return False
+            return False, 0
+
+    def check_state(self):
+        score = Game2048.board.get_score(self.state)
+        for act in Game2048.action:
+            state = act(self.state)
+            if state != self.state:
+              return False, score
+        return True, score
 
     def display(self):
         Game2048.board.display(self.state)
@@ -145,8 +163,12 @@ class Game2048():
 
 if __name__ == '__main__':
     game = Game2048()
-    game.display()
-    while(not game.random_policy()):
-        print('-'*100)
+    end,score = game.check_state()
+    step_num = 0
+    while not end:
+        step_num += 1
+        print('-'*20)
         game.display()
+        end,score = game.random_policy()
+    print("Final score:", score, " steps:", step_num)
 
