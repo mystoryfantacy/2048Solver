@@ -9,40 +9,43 @@ store_name = 'MontaCarlo2048.txt'
 
 max_store_size = 100000000
 
-max_sample_num = 10
+max_sample_num = 100000
 
 game = Game2048()
 #def run_monta_carlo():
 
-def get_act(state):
-    act = 0
+def get_act(state, act_list):
+    act = 5
     if not state in state_store:
-        act = np.random.randint(0, 4)
+        act = random.sample(act_list, 1)[0]
     else:
         max_ub = 0
         visit_num = state_store[state][0]
         current_act = 0
-        for act_num,act_score in state_store[state][1]:
-            dec = act_num + 0.001
-            ub = float(act_score) / dec + math.sqrt(visit_num / dec)
-            if max_ub < ub:
-                act = current_act
-                max_ub = ub
-            current_act += 1
+        for i in range(4):
+            if i not in act_list:
+                state_store[state][1][i][1] = -1
+            else:
+                act_num,act_score = state_store[state][1][i]
+                dec = act_num + 0.001
+                ub = float(act_score) / dec + 10 * math.sqrt(visit_num / dec)
+                if max_ub < ub:
+                    act = i
+                    max_ub = ub
     return act
 
 def run_one_episode():
     game.reset()
     track = []
-    end, score = game.check_state()
+    act_list, score = game.check_state()
     # game.display()
-    while not end:
-        act = get_act(game.state)
+    while len(act_list) > 0:
+        act = get_act(game.state, act_list)
         track.append((game.state, act))
-        end, score = game.move(act)
+        act_list, score = game.move(act)
         # print('[move]',act)
         # game.display()
-    print('---- score:', score)
+    # print('---- score:', score)
     return score, track
 
 def update_store(score, track):
@@ -94,7 +97,9 @@ def run_monta_carlo(load_data = False):
         update_store(score, track)
         i += 1
         if i % print_step == 0:
-            print(i / print_step * 100, '%')
+            print(i / print_step, '%')
+            print(score)
+            save_state_store()
 
     save_state_store()
 

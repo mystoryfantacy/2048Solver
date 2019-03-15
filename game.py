@@ -7,6 +7,7 @@ transition_table[s][dir], dir means direction with 0 meaning right and
 1 meaning left
 """
 transition_table = np.zeros((65536, 2), np.int)
+uint64_mask = (1 << 64) - 1
 
 def init_table():
   # this is a row state, i.e the type of state is uint16
@@ -42,8 +43,8 @@ def init_table():
           else:
               res |= (state & mask)
           mask <<= 4
-      transition_table[i][0] = i ^ res
-      transition_table[revert(i)][1] = revert(i) ^ revert(res)
+      transition_table[i][0] = (i ^ res) & 0x0FFFF
+      transition_table[revert(i)][1] = (revert(i) ^ revert(res)) & 0x0FFFF
 
 class Board():
   def __init__(self):
@@ -72,7 +73,7 @@ class Board():
           offset = i * 16
           tmp_s ^= int(transition_table[((tmp_s >> offset) & 0xFFFF)][1] << offset)
       s = self.transpose(tmp_s)
-      return s
+      return s & uint64_mask
 
   def move_down(self, s):
       tmp_s = self.transpose(s)
@@ -80,19 +81,19 @@ class Board():
           offset = i * 16
           tmp_s ^= int(transition_table[((tmp_s >> offset) & 0xFFFF)][0] << offset)
       s = self.transpose(tmp_s)
-      return s
+      return s & uint64_mask
 
   def move_left(self, s):
       for i in range(4):
           offset = i * 16
           s ^= int(transition_table[((s >> offset) & 0xFFFF)][1] << offset)
-      return s
+      return s & uint64_mask
 
   def move_right(self, s):
       for i in range(4):
           offset = i * 16
           s ^= int(transition_table[((s >> offset) & 0xFFFF)][0] << offset)
-      return s
+      return s & uint64_mask
 
   def get_empty_tile(self, s):
       ret = []
@@ -140,34 +141,39 @@ class Game2048():
         return list(np.random.choice(a= [1,2], size=size, replace=True, p = [0.5, 0.5]))
 
     def random_policy(self):
-        end,score = self.check_state()
-        if end:
-            return end, score
+        act_list,score = self.check_state()
+        if len(act_list) == 0:
+            return [], score
         else:
-            state = self.state
-            while state == self.state:
-              self.move(np.random.randint(0,4))
-            return False, 0
+            return self.move(random.sample(act_list, 1)[0])
 
     def move(self, act):
         state = Game2048.action[act](self.state)
-        if state != self.state:
-          tile = Game2048.board.get_empty_tile(state)
-          tile = random.sample(tile, 1)
-          value = self.get_value(size = 1)
-          self.state = Game2048.board.insert(state, tile[0], value[0])
-          return self.check_state()
-        else:
-          score = Game2048.board.get_score(self.state)
-          return True, score
+        if state == self.state:
+            print("state", self.state)
+            raise ValueError("unexpected action", act)
+        tile = Game2048.board.get_empty_tile(state)
+        if len(tile) == 0:
+            print(self.state)
+            self.display()
+            print('-'*20)
+            self.state = state
+            print(self.state)
+            self.display()
+            raise ValueError("unexpected state after action", act)
+        tile = random.sample(tile, 1)
+        value = self.get_value(size = 1)
+        self.state = Game2048.board.insert(state, tile[0], value[0])
+        return self.check_state()
 
     def check_state(self):
         score = Game2048.board.get_score(self.state)
-        for act in Game2048.action:
+        available_act = []
+        for act_id,act in enumerate(Game2048.action):
             state = act(self.state)
             if state != self.state:
-              return False, score
-        return True, score
+                available_act.append(act_id)
+        return available_act, score
 
     def display(self):
         Game2048.board.display(self.state)
@@ -175,12 +181,12 @@ class Game2048():
 
 if __name__ == '__main__':
     game = Game2048()
-    end,score = game.check_state()
+    act_list,score = game.check_state()
     step_num = 0
-    while not end:
+    while len(act_list) > 0:
         step_num += 1
         print('-'*20)
         game.display()
-        end,score = game.random_policy()
+        act_list,score = game.random_policy()
     print("Final score:", score, " steps:", step_num)
 
