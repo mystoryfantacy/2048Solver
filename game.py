@@ -126,6 +126,10 @@ class Game2048():
     action = [board.move_down, board.move_right, board.move_up, board.move_left]
     def __init__(self):
         self.state = 0
+        self.reset()
+
+    def reset(self):
+        self.state = 0
         tiles = Game2048.board.get_empty_tile(self.state)
         tiles = random.sample(tiles, 2)
         values = self.get_value(size = 2)
@@ -140,14 +144,22 @@ class Game2048():
         if end:
             return end, score
         else:
-            state = Game2048.action[np.random.randint(0,4)](self.state)
+            state = self.state
             while state == self.state:
-              state = Game2048.action[np.random.randint(0,4)](self.state)
-            tile = Game2048.board.get_empty_tile(state)
-            tile = random.sample(tile, 1)
-            value = self.get_value(size = 1)
-            self.state = Game2048.board.insert(state, tile[0], value[0])
+              self.move(np.random.randint(0,4))
             return False, 0
+
+    def move(self, act):
+        state = Game2048.action[act](self.state)
+        if state != self.state:
+          tile = Game2048.board.get_empty_tile(state)
+          tile = random.sample(tile, 1)
+          value = self.get_value(size = 1)
+          self.state = Game2048.board.insert(state, tile[0], value[0])
+          return self.check_state()
+        else:
+          score = Game2048.board.get_score(self.state)
+          return True, score
 
     def check_state(self):
         score = Game2048.board.get_score(self.state)
