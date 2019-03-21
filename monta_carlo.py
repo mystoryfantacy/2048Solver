@@ -14,7 +14,6 @@ max_store_size = 100000000
 max_sample_num = 100000
 
 game = Game2048()
-#def run_monta_carlo():
 
 def get_act(state, act_list):
     act = 5
