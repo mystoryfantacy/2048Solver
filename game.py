@@ -117,10 +117,8 @@ class Board():
               a[15 - i] = 0
       for i in range(4):
           for j in range(4):
-              print("%4d" %(a[i * 4 + j]),end='')
+              print("%4d" %(a[i * 4 + j]), end='')
           print("")
-
-
 
 class Game2048():
     board = Board()
@@ -128,6 +126,10 @@ class Game2048():
     def __init__(self):
         self.state = 0
         self.reset()
+
+    def set(self, state):
+        self.state = state
+        return self.check_state()
 
     def reset(self):
         self.state = 0

@@ -21,13 +21,13 @@ def opendb():
     conn = sqlite3.connect('Game2048Policy.db')
     cursor = conn.cursor()
 
-def existtable():
+def exist_table():
     sql = "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'state')"
     c = _execute(sql)
     v = c.fetchone()
     return v[0] == 1
 
-def createtable():
+def create_table():
     _execute('create table state (id char(8) primary key, cnt int(64), a0_cnt int(32), a0_score float, a1_cnt int(32), a1_score float, a2_cnt int(32), a2_score float, a3_cnt int(32), a3_score float)', commit = True)
 
 def closedb():
@@ -45,26 +45,55 @@ def uint2chars(id_uint):
         i += 1
     return id_char
 
+uint64_mask = (1 << 64) - 1
+def chars2uint(id_char):
+    id_uint = 0
+    i = 0
+    while i < 8:
+        j = ord(id_char[i])
+        id_uint |= (j << (8 * i))
+        i += 1
+    #id_uint &= uint64_mask
+    return id_uint
+
 def insert(state,
            cnt = 0,
            a0_cnt = 0, a1_cnt = 0, a2_cnt = 0, a3_cnt = 0,
            a0_score = 0.0, a1_score = 0.0, a2_score = 0.0, a3_score = 0.0):
-    global conn
-    global cursor
     sql = 'insert into state values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     c = uint2chars(state)
     value = (c, cnt, a0_cnt, a0_score, a1_cnt, a1_score, a2_cnt, a2_score, a3_cnt, a3_score)
-    _execute(sql, value)
-    conn.commit()
+    _execute(sql, value, commit = True)
 
 def query(state):
-    global conn
-    global cursor
     c = uint2chars(state)
     sql = 'select * from state where id=?'
-    cursor.execute(sql, (c,))
+    cursor = _execute(sql, (c,))
     values = cursor.fetchall()
-    return values[0]
+    if len(values) < 1:
+        return None
+    assert(len(values) == 1)
+    values = values[0]
+    return [chars2uint(values[0]), values[1],
+            values[2], values[3], values[4], values[5],
+            values[6], values[7], values[8], values[9]]
+
+def try_query(state):
+    sql = 'SELECT EXISTS(SELECT 1 FROM state WHERE id=?)';
+    state = uint2chars(state)
+    c = _execute(sql, (state,))
+    v = c.fetchone()
+    if v[0] == 1:
+        sql = 'select * from state where id=?'
+        c = _execute(sql, (state,))
+        v = c.fetchall()[0]
+        return [chars2uint(v[0]), v[1],
+                v[2], v[3], v[4], v[5],
+                v[6], v[7], v[8], v[9]]
+    else:
+        return None
+
+
 
 def update(state,
            cnt = 0,
@@ -88,10 +117,11 @@ def delete(state):
 
 if __name__ == '__main__':
     opendb()
-    if not existtable():
+    if not exist_table():
         print('create table')
-        createtable()
+        create_table()
     i = 0xFFFFFFFFFFFFFFFF
+    print('test id =', i)
     if not exists(i):
         insert(state = i)
     print(query(i))
@@ -99,6 +129,7 @@ if __name__ == '__main__':
     print(query(i))
     j = 0x7FFFFFFFFFFFFFFF
     exists(j)
+    print(query(j))
     delete(i)
     closedb()
 
