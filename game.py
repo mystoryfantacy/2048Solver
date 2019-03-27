@@ -109,16 +109,21 @@ class Board():
           score = max(score, v)
       return score if score > 1 else 0
 
-  def display(self, s):
+  def stringify(self, s, end = '\n'):
       a = [0] * 16
       for i in range(15, -1, -1):
           a[15 - i] = (1 << ((s >> (i * 4)) & 0xF))
           if a[15 - i] == 1:
               a[15 - i] = 0
+      res = ''
       for i in range(4):
           for j in range(4):
-              print("%4d" %(a[i * 4 + j]), end='')
-          print("")
+            res += "%5d" %(a[i * 4 + j])
+          res += end
+      return res
+
+  def display(self, s):
+      print(self.stringify(s))
 
 class Game2048():
     board = Board()
@@ -152,7 +157,8 @@ class Game2048():
     def move(self, act):
         state = Game2048.action[act](self.state)
         if state == self.state:
-            print("state", self.state)
+            print("state\n")
+            print(self)
             raise ValueError("unexpected action", act)
         tile = Game2048.board.get_empty_tile(state)
         if len(tile) == 0:
@@ -177,9 +183,14 @@ class Game2048():
                 available_act.append(act_id)
         return available_act, score
 
+    def stringify(self, end = '\n'):
+        Game2048.board.stringify(self.state, end = end)
+
     def display(self):
         Game2048.board.display(self.state)
 
+    def __str__(self):
+        return Game2048.board.stringify(self.state)
 
 if __name__ == '__main__':
     game = Game2048()

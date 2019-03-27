@@ -1,12 +1,14 @@
 import numpy as np
 import math
+import copy
 
 class Node():
+    stringify = None
     def __init__(self, parent, act, state, prob):
         self.parent = parent
         self.act = act
         self.state = state
-        self.factor = 1
+        self.factor = 100
         self.n = 0
         self.score = 0.0
         self.prob = prob
@@ -37,6 +39,7 @@ class Node():
         return self.act_s[act][state]
 
     def update(self):
+        self.n += 1
         for i in range(len(self.act_n)):
             v = self.act_n[i] * self.act_v[i]
         self.score = v / (self.n+1e-10)
@@ -46,9 +49,36 @@ class Node():
             act = self.act
             tmp = self.parent.act_n[act] * self.parent.act_v[act]
             self.parent.act_n[act] += 1
-            self.parent.act_v[act] = float(self.parent.act_v[act]) / self.parent.act_n[act]
+            self.parent.act_v[act] = float(self.score + tmp) / self.parent.act_n[act]
             self.parent.update()
             self.parent.update_recursive()
+
+    def print(self, fname):
+        fout = open(fname, 'w')
+        fout.write("digraph G {\n")
+        fout.write("node [\n fontname = \"Courier New\"\n")
+        fout.write(" fontsize = 8\n shape = record\n]\n")
+        Node._cnt = 0
+        self._print(fout)
+        fout.write("}")
+
+    def _print(self, fout):
+        self._id = Node._cnt
+        Node._cnt += 1
+        name = 'N' + str(self._id)
+        if self.parent:
+            fout.write('N' + str(self.parent._id) + '_' + str(self.act) + ' -> ' + name + '\n')
+        label = Node.stringify(self.state, end = '\\r')
+        node = name + ' [\n label=\"{' + name + '|' + label + '}\"\n]\n'
+        fout.write(node)
+        for i in range(len(self.act_s)):
+            fout.write(name + ' -> ' + name + '_' + str(i) + '\n')
+
+        for i in range(len(self.act_s)):
+            for s,n in self.act_s[i].items():
+                n._print(fout)
+
+
 
 def softmax(x):
     prob = np.exp(x - np.max(x))
@@ -57,7 +87,7 @@ def softmax(x):
 
 class MCTS():
     def __init__(self, game, policy, n_play_out):
-        self.game = game
+        self.game = copy.deepcopy(game)
         self.game.reset()
         self.root = Node(None, None, game.state, self.init_act_probs())
         self.policy = policy
@@ -107,12 +137,14 @@ class MCTS():
     def get_move_prob(self, state):
         temp = 1e1
         self.game.set(state)
+        a, _ = self.game.check_state()
         for i in range(self.n_playout):
             self.play_out()
 
-        probs = softmax(1.0 / temp *(np.log(np.array(self.root.act_n) + 1e-10)))
-        #x = np.array(self.root.act_n)
-        #probs = x / np.sum(x)
+        #self.root.print('test.gv')
+        #probs = softmax(1.0 / temp *(np.log(np.array(self.root.act_n) + 1e-10)))
+        x = np.array(self.root.act_n)
+        probs = x / np.sum(x)
         return probs
 
     def update_with_move(self, act, state):
@@ -121,7 +153,7 @@ class MCTS():
             self.root.parent = None
         else:
             self.game.set(state)
-            self.root = Node(None, state, self.init_act_probs())
+            self.root = Node(None, None, state, self.init_act_probs())
 
 class MCTSPlayer():
     def __init__(self, game, policy):
@@ -131,14 +163,20 @@ class MCTSPlayer():
 
     def play(self):
         self.game.reset()
-        prob = self.mcts.get_move_prob(self.game.state)
-        move = np.random.choice(self.actions, p = prob)
-        print('p=', prob, 'move=', move)
-
+        act_list, score = self.game.check_state()
+        while len(act_list) > 0:
+            prob = self.mcts.get_move_prob(self.game.state)
+            act = np.random.choice(self.actions, p = prob)
+            print('p=', prob, 'move=', act)
+            self.game.move(act)
+            self.mcts.update_with_move(act, self.game.state)
+            act_list, score = self.game.check_state()
+        print('score', score)
 
 if __name__ == '__main__':
     import game as g
     game = g.Game2048()
+    Node.stringify = game.board.stringify
 
     def simple_policy(s):
         n = len(game.action)
