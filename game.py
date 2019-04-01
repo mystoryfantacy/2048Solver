@@ -109,12 +109,16 @@ class Board():
           score = max(score, v)
       return score if score > 1 else 0
 
-  def stringify(self, s, end = '\n'):
+  def decompress(self, s):
       a = [0] * 16
       for i in range(15, -1, -1):
           a[15 - i] = (1 << ((s >> (i * 4)) & 0xF))
           if a[15 - i] == 1:
               a[15 - i] = 0
+      return a
+
+  def stringify(self, s, end = '\n'):
+      a = self.decompress(s)
       res = ''
       for i in range(4):
           for j in range(4):
