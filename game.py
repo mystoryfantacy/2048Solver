@@ -149,7 +149,7 @@ class Game2048():
             self.state = Game2048.board.insert(self.state, tiles[i], values[i])
 
     def get_value(self, size = 1):
-        return list(np.random.choice(a= [1,2], size=size, replace=True, p = [0.5, 0.5]))
+        return list(np.random.choice(a= [1,2], size=size, replace=True, p = [0.9, 0.1]))
 
     def random_policy(self):
         act_list,score = self.check_state()
