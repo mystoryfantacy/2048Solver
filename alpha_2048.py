@@ -102,6 +102,7 @@ class MCTS():
         self.root = None
         self.policy = policy
         self.n_playout = n_play_out
+        self.max_new_node_depth = 20
 
     def filter_probs(self, act_list, probs):
         p = 0
@@ -126,17 +127,22 @@ class MCTS():
         node = None
         act_list, score = self.game.set(self.root.state)
         act = None
+        values = 0
+        new_node_depth = 0
         while len(act_list) and next_node:
             node = next_node
             act = node.get_act(act_list)
             act_list,score = self.game.move(act)
             next_node = node.get_child(act, self.game.state)
 
-        if not next_node:
-            prob, values = self.policy(self.game.state)
-            act_list, score = self.game.check_state()
-            prob = self.filter_probs(act_list, prob)
-            next_node = node.add_child(act, self.game.state, prob)
+            if not next_node:
+                prob, values = self.policy(self.game.state)
+                act_list, score = self.game.check_state()
+                prob = self.filter_probs(act_list, prob)
+                next_node = node.add_child(act, self.game.state, prob)
+                new_node_depth += 1
+                if new_node_depth > self.max_new_node_depth:
+                    break
 
         if not len(act_list):
             next_node.score = score
@@ -171,7 +177,7 @@ class MCTS():
 class MCTSPlayer():
     def __init__(self, game, policy_value_net):
         self.policy_value_net = policy_value_net
-        self.mcts = MCTS(game, self.policy, 100)
+        self.mcts = MCTS(game, self.policy, 400)
         self.game = game
         self.actions = np.array(range(len(game.action)), dtype = np.int)
         self.history = []
