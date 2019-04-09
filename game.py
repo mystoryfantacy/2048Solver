@@ -71,7 +71,8 @@ class Board():
       tmp_s = self.transpose(s)
       for i in range(4):
           offset = i * 16
-          tmp_s ^= int(transition_table[((tmp_s >> offset) & 0xFFFF)][1] << offset)
+          tmp = int(transition_table[((tmp_s >> offset) & 0xFFFF)][1])
+          tmp_s ^=  (tmp << offset)
       s = self.transpose(tmp_s)
       return s & uint64_mask
 
@@ -79,20 +80,23 @@ class Board():
       tmp_s = self.transpose(s)
       for i in range(4):
           offset = i * 16
-          tmp_s ^= int(transition_table[((tmp_s >> offset) & 0xFFFF)][0] << offset)
+          tmp = int(transition_table[((tmp_s >> offset) & 0xFFFF)][0])
+          tmp_s ^=  (tmp << offset)
       s = self.transpose(tmp_s)
       return s & uint64_mask
 
   def move_left(self, s):
       for i in range(4):
           offset = i * 16
-          s ^= int(transition_table[((s >> offset) & 0xFFFF)][1] << offset)
+          tmp = int(transition_table[((s >> offset) & 0xFFFF)][1])
+          s ^=  (tmp << offset)
       return s & uint64_mask
 
   def move_right(self, s):
       for i in range(4):
           offset = i * 16
-          s ^= int(transition_table[((s >> offset) & 0xFFFF)][0] << offset)
+          tmp = int(transition_table[((s >> offset) & 0xFFFF)][0])
+          s ^= int(tmp << offset)
       return s & uint64_mask
 
   def get_empty_tile(self, s):

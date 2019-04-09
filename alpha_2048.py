@@ -102,6 +102,8 @@ class MCTS():
         self.root = None
         self.policy = policy
         self.n_playout = n_play_out
+        self.max_value = 0
+        self.max_score = 0
 
     def filter_probs(self, act_list, probs):
         p = 0
@@ -132,16 +134,26 @@ class MCTS():
             act_list,score = self.game.move(act)
             next_node = node.get_child(act, self.game.state)
 
+            if not next_node:
+                prob, values = self.policy(self.game.state)
+                act_list, score = self.game.check_state()
+                prob = self.filter_probs(act_list, prob)
+                next_node = node.add_child(act, self.game.state, prob)
+
+        """
         if not next_node:
             prob, values = self.policy(self.game.state)
             act_list, score = self.game.check_state()
             prob = self.filter_probs(act_list, prob)
             next_node = node.add_child(act, self.game.state, prob)
-
+        """
+        #print ('score', score,' value', values)
         if not len(act_list):
             next_node.score = score
+            self.max_score = max(score, self.max_score)
         else:
             next_node.score = values
+            self.max_value = max(values, self.max_value)
         next_node.update_recursive()
 
     def get_move_prob(self):
@@ -151,6 +163,10 @@ class MCTS():
         for i in range(self.n_playout):
             self.play_out()
 
+        print('max score:', self.max_score)
+        print('max values', self.max_value)
+        self.max_score = 0
+        self.max_value = 0
         #self.root.print('test.gv')
         #probs = softmax(1.0 / temp *(np.log(np.array(self.root.act_n) + 1e-10)))
         x = np.array(self.root.act_n)
@@ -171,20 +187,21 @@ class MCTS():
 class MCTSPlayer():
     def __init__(self, game, policy_value_net):
         self.policy_value_net = policy_value_net
-        self.mcts = MCTS(game, self.policy, 10)
+        self.mcts = MCTS(game, self.policy, 1024)
         self.game = game
         self.actions = np.array(range(len(game.action)), dtype = np.int)
         self.history = []
-        self.batch_size = 4 #1024
+        self.batch_size = 1024
         self.evaluate_sample_num = 5
-        self.evaluate_interval = 1
-        self.train_num = 10
+        self.evaluate_interval = 100
+        self.train_num = 100
         self.epoch = 2
         self.learn_rate = 1e-3
 
     def policy(self, state):
         state = np.array(self.game.board.decompress(state)).reshape(1, 1, 4, 4)
         probs, score_vec = self.policy_value_net.predict(state)
+        #print('score vector:', score_vec)
         i = np.argmax(score_vec[0])
         #print('probs:',probs, 'scores:', score_vec, 'i:', i)
         return probs[0], (1 << (i + 1))
@@ -276,5 +293,5 @@ if __name__ == '__main__':
         n = len(game.action)
         return [1.0/n for i in range(n)], 128
 
-    player = MCTSPlayer(game, PV_Net())
+    player = MCTSPlayer(game, PV_Net('game_2048_pv.weight'))
     player.train()
