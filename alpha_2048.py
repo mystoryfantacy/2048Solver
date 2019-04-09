@@ -171,15 +171,15 @@ class MCTS():
 class MCTSPlayer():
     def __init__(self, game, policy_value_net):
         self.policy_value_net = policy_value_net
-        self.mcts = MCTS(game, self.policy, 10)
+        self.mcts = MCTS(game, self.policy, 100)
         self.game = game
         self.actions = np.array(range(len(game.action)), dtype = np.int)
         self.history = []
-        self.batch_size = 4 #1024
+        self.batch_size = 1024
         self.evaluate_sample_num = 5
-        self.evaluate_interval = 1
-        self.train_num = 10
-        self.epoch = 2
+        self.evaluate_interval = 50
+        self.train_num = 100
+        self.epoch = 10
         self.learn_rate = 1e-3
 
     def policy(self, state):
@@ -276,5 +276,5 @@ if __name__ == '__main__':
         n = len(game.action)
         return [1.0/n for i in range(n)], 128
 
-    player = MCTSPlayer(game, PV_Net())
+    player = MCTSPlayer(game, PV_Net(model_file='game_2048_pv.weight'))
     player.train()
