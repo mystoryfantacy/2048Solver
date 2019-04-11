@@ -18,7 +18,12 @@ class Node():
         self.act_v =[0.0 for i in range(len(prob))]
 
     def __str__(self):
-        s = 'parent:' + str(self.parent) + '\n'
+        s = ''
+        if self.is_root():
+            s += 'Root\n'
+        else:
+            s += 'parent:' + str(self.parent.state) + '\n'
+        s += 'score:' + str(self.score) + '\n'
         s += 'act:' + str(self.act) + '\n'
         s += 'prob:' + str(self.prob) + '\n'
         s += 'act_n:' + str(self.act_n) + '\n'
@@ -50,8 +55,9 @@ class Node():
 
     def update(self):
         self.n += 1
+        v = 0.0
         for i in range(len(self.act_n)):
-            v = self.act_n[i] * self.act_v[i]
+            v += self.act_n[i] * self.act_v[i]
         self.score = v / (self.n+1e-10)
 
     def update_recursive(self):
@@ -104,6 +110,7 @@ class MCTS():
         self.n_playout = n_play_out
         self.max_value = 0
         self.max_score = 0
+        self.max_new_node_depth = 3
 
     def filter_probs(self, act_list, probs):
         p = 0
@@ -128,6 +135,8 @@ class MCTS():
         node = None
         act_list, score = self.game.set(self.root.state)
         act = None
+        values = 0
+        new_node_depth = 0
         while len(act_list) and next_node:
             node = next_node
             act = node.get_act(act_list)
@@ -139,15 +148,10 @@ class MCTS():
                 act_list, score = self.game.check_state()
                 prob = self.filter_probs(act_list, prob)
                 next_node = node.add_child(act, self.game.state, prob)
+                new_node_depth += 1
+                #if new_node_depth > self.max_new_node_depth:
+                #    break
 
-        """
-        if not next_node:
-            prob, values = self.policy(self.game.state)
-            act_list, score = self.game.check_state()
-            prob = self.filter_probs(act_list, prob)
-            next_node = node.add_child(act, self.game.state, prob)
-        """
-        #print ('score', score,' value', values)
         if not len(act_list):
             next_node.score = score
             self.max_score = max(score, self.max_score)
@@ -169,6 +173,9 @@ class MCTS():
         self.max_value = 0
         #self.root.print('test.gv')
         #probs = softmax(1.0 / temp *(np.log(np.array(self.root.act_n) + 1e-10)))
+
+        #print('Monta-Carlo-Result')
+        #print(self.root)
         x = np.array(self.root.act_n)
         probs = x / np.sum(x)
         if (np.sum(x) == 0):
@@ -192,10 +199,10 @@ class MCTSPlayer():
         self.actions = np.array(range(len(game.action)), dtype = np.int)
         self.history = []
         self.batch_size = 1024
-        self.evaluate_sample_num = 5
-        self.evaluate_interval = 100
+        self.evaluate_sample_num = 1
+        self.evaluate_interval = 50
         self.train_num = 100
-        self.epoch = 2
+        self.epoch = 10
         self.learn_rate = 1e-3
 
     def policy(self, state):
@@ -257,6 +264,7 @@ class MCTSPlayer():
         for i in range(self.evaluate_sample_num):
           self.game.reset()
           act_list, score = self.game.check_state()
+          print(self.game)
           act = None
           while len(act_list) > 0:
               self.mcts.update_with_move(act, self.game.state)
@@ -264,6 +272,8 @@ class MCTSPlayer():
               act = np.argmax(prob)
               try:
                   self.game.move(act)
+                  #print('move', act)
+                  #print(self.game)
               except ValueError:
                   print('prob=',prob)
                   print(ValueError)
@@ -293,5 +303,6 @@ if __name__ == '__main__':
         n = len(game.action)
         return [1.0/n for i in range(n)], 128
 
-    player = MCTSPlayer(game, PV_Net('game_2048_pv.weight'))
-    player.train()
+    player = MCTSPlayer(game, PV_Net(model_file='game_2048_pv.weight'))
+    player.evaluate()
+    #player.train()
