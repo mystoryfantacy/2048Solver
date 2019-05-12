@@ -39,7 +39,7 @@ class PolicyValueNet():
         policy_net = Flatten()(policy_net)
         self.policy_net = Dense(4, activation="softmax", kernel_regularizer=l2(self.l2_const))(policy_net)
 
-        value_net = CustomConv2D(4, (1,1))(network)
+        value_net = CustomConv2D(12, (1,1))(network)
         value_net = Flatten()(value_net)
         self.value_net = Dense(12, activation="softmax", kernel_regularizer=l2(self.l2_const))(policy_net)
 

@@ -9,7 +9,7 @@ class Node():
         self.parent = parent
         self.act = act
         self.state = state
-        self.factor = 1
+        self.factor = 0.1
         self.n = 0
         self.score = 0.0
         self.prob = prob
@@ -28,7 +28,7 @@ class Node():
         s += 'prob:' + str(self.prob) + '\n'
         s += 'act_n:' + str(self.act_n) + '\n'
         s += 'act_v:' + str(self.act_v) + '\n'
-        s += 'act_s:' + str(self.act_s) + '\n'
+        #s += 'act_s:' + str(self.act_s) + '\n'
         return s
 
     def is_leaf(self, act, state):
@@ -46,7 +46,7 @@ class Node():
 
     def get_act_value(self, a):
         return math.sqrt(self.n / (self.act_n[a]+1e-10)) * self.prob[a] * self.factor \
-               + self.act_v[a]
+               + math.log(self.act_v[a] + 1e-10)
 
     def get_child(self, act, state):
         if not state in self.act_s[act]:
@@ -110,7 +110,7 @@ class MCTS():
         self.n_playout = n_play_out
         self.max_value = 0
         self.max_score = 0
-        self.max_new_node_depth = 3
+        self.max_new_node_depth = 2
 
     def filter_probs(self, act_list, probs):
         p = 0
@@ -149,15 +149,16 @@ class MCTS():
                 prob = self.filter_probs(act_list, prob)
                 next_node = node.add_child(act, self.game.state, prob)
                 new_node_depth += 1
-                #if new_node_depth > self.max_new_node_depth:
-                #    break
+                if new_node_depth > self.max_new_node_depth:
+                    break
 
         if not len(act_list):
             next_node.score = score
-            self.max_score = max(score, self.max_score)
+            #self.max_score = max(score, self.max_score)
         else:
+            values = max(values, score)
             next_node.score = values
-            self.max_value = max(values, self.max_value)
+            #self.max_value = max(values, self.max_value)
         next_node.update_recursive()
 
     def get_move_prob(self):
@@ -167,10 +168,10 @@ class MCTS():
         for i in range(self.n_playout):
             self.play_out()
 
-        print('max score:', self.max_score)
-        print('max values', self.max_value)
-        self.max_score = 0
-        self.max_value = 0
+        #print('max score:', self.max_score)
+        #print('max values', self.max_value)
+        #self.max_score = 0
+        #self.max_value = 0
         #self.root.print('test.gv')
         #probs = softmax(1.0 / temp *(np.log(np.array(self.root.act_n) + 1e-10)))
 
@@ -194,16 +195,18 @@ class MCTS():
 class MCTSPlayer():
     def __init__(self, game, policy_value_net):
         self.policy_value_net = policy_value_net
-        self.mcts = MCTS(game, self.policy, 1024)
+        self.mcts = MCTS(game, self.policy, 128)
         self.game = game
         self.actions = np.array(range(len(game.action)), dtype = np.int)
         self.history = []
-        self.batch_size = 1024
+        self.batch_size = 512
         self.evaluate_sample_num = 1
         self.evaluate_interval = 50
-        self.train_num = 100
+        self.check_point_interval = 10
+        self.train_num = 10000
         self.epoch = 10
         self.learn_rate = 1e-3
+        self.max_history_len = 2e5
 
     def policy(self, state):
         state = np.array(self.game.board.decompress(state)).reshape(1, 1, 4, 4)
@@ -243,53 +246,75 @@ class MCTSPlayer():
         return v
 
     def train_once(self):
+        tmp_buf = []
         while 1:
             play_data = self.play()
-            self.history.extend(play_data)
-            if len(self.history) > self.batch_size:
+            tmp_buf.extend(play_data)
+            if len(tmp_buf) > 4 * self.batch_size:
+                self.history.extend(tmp_buf)
+                tmp_buf = []
                 print('training...')
-                mini_batch = random.sample(self.history, self.batch_size)
-                states = np.array([ np.array(self.game.board.decompress(b[0])).reshape(1, 4, 4)
-                            for b in mini_batch ])
-                probs = np.array([ np.array(b[1]) for b in mini_batch ])
-                scores = np.array([ np.array(self.score2vec(b[2])) for b in mini_batch ])
                 for j in range(self.epoch):
+                    mini_batch = random.sample(self.history, self.batch_size)
+                    states = np.array([ np.array(self.game.board.decompress(b[0])).reshape(1, 4, 4)
+                                for b in mini_batch ])
+                    probs = np.array([ np.array(b[1]) for b in mini_batch ])
+                    scores = np.array([ np.array(self.score2vec(b[2])) for b in mini_batch ])
                     #loss, entropy = self.policy_value_net.train_step(states, probs, scores, self.learn_rate)
                     self.policy_value_net.train_step(states, probs, scores, self.learn_rate)
-                self.history = []
+                history_len = len(self.history)
+                if history_len > self.max_history_len:
+                    self.history = self.history[int(self.max_history_len / 4): -1]
                 break
 
-    def evaluate(self):
+    def evaluate(self, log_file = None):
         total_score = 0.0
+        if log_file:
+            log_file.write('evaluate begin:\n')
         for i in range(self.evaluate_sample_num):
-          self.game.reset()
-          act_list, score = self.game.check_state()
-          print(self.game)
-          act = None
-          while len(act_list) > 0:
-              self.mcts.update_with_move(act, self.game.state)
-              prob = self.mcts.get_move_prob()
-              act = np.argmax(prob)
-              try:
+            self.game.reset()
+            act_list, score = self.game.check_state()
+            print(self.game)
+            act = None
+            while len(act_list) > 0:
+                self.mcts.update_with_move(act, self.game.state)
+                prob = self.mcts.get_move_prob()
+                act = np.argmax(prob)
+                try:
+                  s = str(self.mcts.root) + '\n'
                   self.game.move(act)
-                  #print('move', act)
-                  #print(self.game)
-              except ValueError:
-                  print('prob=',prob)
-                  print(ValueError)
-                  exit()
+                  s += 'move ' + str(act) + '\n'
+                  s += str(self.game) + '\n'
+                  if log_file:
+                      log_file.write(s)
+                  else:
+                      print(s)
+                except ValueError:
+                    print('prob=',prob)
+                    print(ValueError)
+                    exit()
 
-              act_list, score = self.game.check_state()
-          print('Game', i, 'score', score)
-          total_score += score
+                act_list, score = self.game.check_state()
+            if log_file:
+                log_file.write('Game ' + str(i) + ' score' + str(score) + '\n')
+                
+            print('Game', i, 'score', score)
+            total_score += score
         print('average score:',total_score / self.evaluate_sample_num)
+        if log_file:
+            log_file.write('evaluate end.\n')
 
     def train(self):
+        log = open('evaluate.log', 'w')
         for i in range(self.train_num):
+            print('iter',i,':')
             self.train_once()
             if i % self.evaluate_interval == 0:
-                self.evaluate()
+                self.evaluate(log_file = log)
+            if (i + 1) % self.check_point_interval == 0:
+                self.policy_value_net.save_model('./checkpoint/game_2048_pv_' + str(i) + '.weight') 
         self.policy_value_net.save_model('game_2048_pv.weight')
+        log.close()
 
 
 
@@ -304,5 +329,5 @@ if __name__ == '__main__':
         return [1.0/n for i in range(n)], 128
 
     player = MCTSPlayer(game, PV_Net(model_file='game_2048_pv.weight'))
-    player.evaluate()
-    #player.train()
+    #player.evaluate(log_file = open('test.log', 'w'))
+    player.train()
